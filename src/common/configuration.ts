@@ -3,11 +3,7 @@ import { z } from 'zod';
 const envSchema = z.object({
   PORT: z.coerce.number().int().min(1).max(65535).default(3000),
   NODE_ENV: z.enum(['development', 'production', 'test']).default('development'),
-  DB_HOST: z.string().min(1).default('localhost'),
-  DB_PORT: z.coerce.number().int().min(1).max(65535).default(5432),
-  DB_USER: z.string().min(1).default('postgres'),
-  DB_PASSWORD: z.string().min(1).default('postgres'),
-  DB_NAME: z.string().min(1).default('sandbox'),
+  DB_PATH: z.string().min(1).default('./data/app.db'),
   JWT_SECRET: z.string().min(10).default('super-secret-key'),
   JWT_EXPIRES_IN: z
     .string()
@@ -36,10 +32,6 @@ export interface JwtConfiguration {
 }
 
 export interface DatabaseConfiguration {
-  host: string;
-  port: number;
-  user: string;
-  password: string;
   dbName: string;
   entities: string[];
 }
@@ -56,11 +48,7 @@ export const configuration = (): AppConfiguration => {
     environment: env.NODE_ENV,
     isProduction: env.NODE_ENV === 'production',
     database: {
-      host: env.DB_HOST,
-      port: env.DB_PORT,
-      user: env.DB_USER,
-      password: env.DB_PASSWORD,
-      dbName: env.DB_NAME,
+      dbName: env.DB_PATH,
       entities: ['dist/**/*.entity.js'],
     },
     jwt: {
