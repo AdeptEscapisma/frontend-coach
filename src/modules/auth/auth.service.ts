@@ -1,10 +1,11 @@
-import { Injectable, ConflictException } from '@nestjs/common';
+import { Injectable, ConflictException, UnauthorizedException } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
 import { EntityManager } from '@mikro-orm/core';
 import * as bcrypt from 'bcryptjs';
 import { v4 as uuidv4 } from 'uuid';
 import { RegisterDto } from './dto/register.dto';
+import { LoginDto } from './dto/login.dto';
 import { RefreshTokenSchema } from './entities/refresh-token.entity';
 import { User, UserSchema } from '../users/entities/user.entity';
 import { UsersService } from '../users/users.service';
@@ -40,6 +41,75 @@ export class AuthService {
     });
 
     await this.em.persist(user).flush();
+
+    const tokens = await this.generateTokens(user.id, user.login);
+
+    return { user, ...tokens };
+  }
+
+  async login(dto: LoginDto) {
+    const user = await this.usersService.findByLogin(dto.login);
+
+    if (!user) {
+      throw new UnauthorizedException('Invalid login or password');
+    }
+
+    const isPasswordValid = await bcrypt.compare(dto.password, user.password);
+
+    if (!isPasswordValid) {
+      throw new UnauthorizedException('Invalid login or password');
+    }
+
+    const tokens = await this.generateTokens(user.id, user.login);
+
+    return { user, ...tokens };
+  }
+
+  async logout(token: string) {
+    try {
+      const payload = this.jwtService.verify<{ sub: string; jti: string }>(token);
+
+      const refreshTokenEntity = await this.em.findOne(RefreshTokenSchema, { jti: payload.jti });
+
+      if (refreshTokenEntity && !refreshTokenEntity.isRevoked) {
+        refreshTokenEntity.isRevoked = true;
+        await this.em.persist(refreshTokenEntity).flush();
+      }
+    } catch {
+      // Истёкший или невалидный токен — идемпотентно игнорируем
+    }
+  }
+
+  async refresh(token: string) {
+    let payload: { sub: string; jti: string };
+
+    try {
+      payload = this.jwtService.verify<{ sub: string; jti: string }>(token);
+    } catch {
+      throw new UnauthorizedException('Invalid refresh token');
+    }
+
+    const refreshTokenEntity = await this.em.findOne(RefreshTokenSchema, { jti: payload.jti });
+
+    if (!refreshTokenEntity) {
+      throw new UnauthorizedException('Invalid refresh token');
+    }
+
+    if (refreshTokenEntity.isRevoked) {
+      throw new UnauthorizedException('Refresh token has been revoked');
+    }
+
+    if (refreshTokenEntity.expiresAt < new Date()) {
+      throw new UnauthorizedException('Refresh token has expired');
+    }
+
+    const user = await this.usersService.findById(payload.sub);
+    if (!user) {
+      throw new UnauthorizedException('User not found');
+    }
+
+    refreshTokenEntity.isRevoked = true;
+    await this.em.persist(refreshTokenEntity).flush();
 
     const tokens = await this.generateTokens(user.id, user.login);
 

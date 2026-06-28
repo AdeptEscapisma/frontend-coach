@@ -6,6 +6,7 @@ import { MikroOrmModule } from '@mikro-orm/nestjs';
 import { AuthService } from './auth.service';
 import { AuthController } from './auth.controller';
 import { JwtStrategy } from './strategies/jwt.strategy';
+import { CleanupRefreshTokensTask } from './tasks/cleanup-refresh-tokens.task';
 import { RefreshTokenSchema } from './entities/refresh-token.entity';
 import { UsersModule } from '../users/users.module';
 import { AppConfiguration } from 'src/common/configuration';
@@ -29,7 +30,7 @@ import { AppConfiguration } from 'src/common/configuration';
     MikroOrmModule.forFeature([RefreshTokenSchema]),
     UsersModule,
   ],
-  providers: [AuthService, JwtStrategy],
+  providers: [AuthService, JwtStrategy, CleanupRefreshTokensTask],
   controllers: [AuthController],
 })
 export class AuthModule {}
